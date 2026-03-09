@@ -6,162 +6,97 @@
 
 - **Zero Config**: Pipe JSON, CSV, or space-separated numbers — it just works
 - **Five Chart Types**: Horizontal bars, vertical columns, sparklines, density heatmaps, and high-resolution Braille patterns
+- **Interactive Explorer**: Dynamically adjust chart type, width, and color with real-time terminal updates
 - **SVG Export**: Generate clean vector graphics for GitHub READMEs and documentation
 - **Pipe Friendly**: Seamlessly integrates with `curl`, `cat`, `jq`, and shell workflows
 - **ESM Native**: Modern TypeScript with zero dependencies, runs on Bun and Node.js 20+
 
 ## 📦 Installation
 
-```bash
+bash
 npm install -g @adametherzlab/chartli
 # or
 bun add -g @adametherzlab/chartli
-```
+
 
 ## 🚀 Quick Start
 
-```bash
+bash
 # Basic bar chart from piped data
-echo "10 50 30 80 20" | chartli
+echo "10 50 30 80 60" | chartli
 
-# Sparkline from a file
-chartli --type spark metrics.txt
+# Sparkline
+echo "1 3 5 2 8 4" | chartli --type spark
 
-# Vertical columns with custom width and color
-cat data.csv | chartli --type column --width 60 --color cyan
+# SVG export
+echo "10 20 30" | chartli --svg output.svg
 
-# Export to SVG for your README
-chartli --svg chart.svg --title "Q4 Revenue" sales.json
-```
 
-## 🖥️ CLI Usage
+## 🎮 Interactive Explorer
 
-### Chart Types
+Launch the interactive explorer to dynamically adjust chart parameters and see real-time updates:
 
-**Bar Chart** (default) — Horizontal bars using Unicode blocks:
-```bash
-chartli values.txt
-# or explicitly
-chartli --type bar values.txt
-```
-Output:
-```
-Sales    ████████████████████ 120
-Revenue  ██████████████ 85
-Profit   ██████ 42
-```
+bash
+# Start interactive mode from a file
+chartli --interactive data.csv
 
-**Sparkline** — Compact single-line trend:
-```bash
-echo "1 5 2 8 3 9" | chartli --type spark
-```
-Output:
-```
-▁▄▂█▃█
-```
+# Or pipe data into interactive mode
+echo "10 20 30 40 50" | chartli -i
 
-**Column Chart** — Vertical bars:
-```bash
-chartli --type column --height 10 data.json
-```
 
-**Heatmap** — 2D density visualization:
-```bash
-chartli --type heatmap matrix.csv
-```
+### Controls
 
-**Braille** — High-resolution dot matrix:
-```bash
-chartli --type braille --width 40 sensor-data.txt
-```
+| Key | Action |
+|-----|--------|
+| `t` / `T` | Cycle chart type forward / backward |
+| `w` / `W` | Increase / decrease width by 5 |
+| `c` / `C` | Cycle color scheme forward / backward |
+| `q` | Quit explorer |
 
-### Flags
+The explorer displays the current chart type, width, and color scheme in a status bar below the chart. Changes are applied instantly.
 
-| Flag | Description | Default |
-|------|-------------|---------|
-| `--type` | Chart type: `bar`, `column`, `spark`, `heatmap`, `braille` | `bar` |
-| `--width` | Maximum width in characters | `80` |
-| `--height` | Maximum height (for column charts) | `20` |
-| `--color` | Color scheme: `auto`, `none`, `red`, `green`, `yellow`, `blue`, `magenta`, `cyan` | `auto` |
-| `--title` | Chart title displayed above output | none |
-| `--svg` | Export to SVG file path | none |
+## 📖 API
 
-## 🔌 Programmatic API
+### `parseText(input: string): ParsedData`
 
-```typescript
-// REMOVED external import: import { parseText, renderBar, renderSpark, renderToSvg, type ChartOptions } from '@adametherzlab/chartli';
+Parse raw text (JSON, CSV, or space-separated numbers) into normalized data.
 
-// Parse raw input
-const data = parseText("10 20 30 40");
-console.log(data.values); // [10, 20, 30, 40]
+### `renderBar(values, options): RenderResult`
 
-// Render options
-const options: ChartOptions = {
-  width: 60,
-  color: 'green',
-  title: 'Weekly Active Users'
-};
+Render a horizontal bar chart.
 
-// Generate terminal chart
-const result = renderBar([10, 25, 15, 40, 30], options);
-console.log(result.terminal);
+### `renderSpark(values, options): RenderResult`
 
-// Export SVG
-const svg = renderToSvg([10, 25, 15, 40, 30], options, 'bar');
-await Bun.write('chart.svg', svg);
-```
+Render a single-line sparkline.
 
-### API Reference
+### `renderColumn(values, options): RenderResult`
 
-#### `parseText(input: string): ParsedData`
-```typescript
-const data = parseText("10 20 30");
-// => { values: [10, 20, 30], sourceFormat: "plain" }
-```
+Render a vertical column chart.
 
-#### `parseInput(source?: string): Promise<ParsedData>`
-```typescript
-const data = await parseInput("./metrics.csv");
-const fromStdin = await parseInput("-");
-```
+### `renderHeatmap(values, options): RenderResult`
 
-#### `renderBar(values: readonly number[], options: ChartOptions): RenderResult`
-#### `renderColumn(values: readonly number[], options: ChartOptions): RenderResult`
-Render vertical column chart.
+Render a 2D heatmap grid.
 
-#### `renderSpark(values: readonly number[], options: ChartOptions): RenderResult`
-Render single-line sparkline using `▁▂▃▄▅▆▇█`.
+### `renderBraille(values, options): RenderResult`
 
-#### `renderHeatmap(values: readonly number[], options: ChartOptions): RenderResult`
-#### `renderBraille(values: readonly number[], options: ChartOptions): RenderResult`
-Render high-resolution dot-matrix using Unicode Braille patterns (U+2800–U+28FF).
+Render a high-resolution Braille dot pattern.
 
-#### `renderChart(values: readonly number[], options: ChartOptions, type: ChartType): RenderResult`
-#### `renderToSvg(values: readonly number[], options: ChartOptions, chartType: ChartType): string`
-#### `runCli(argv: readonly string[]): void`
-Execute the CLI programmatically.
+### `renderToSvg(values, options, chartType): string`
 
-```typescript
-// REMOVED external import: import { runCli } from '@adametherzlab/chartli';
-runCli(["--type", "spark", "data.txt"]);
-```
+Generate SVG markup.
 
-## 🎨 SVG Export Workflow
+### `createExplorerState(options?): ExplorerState`
 
-Generate publication-ready charts for documentation:
+Create an initial explorer state from chart options.
 
-```bash
-chartli --type bar --svg assets/chart.svg --title "Response Times (ms)" --width 800 benchmarks.json
-```
+### `applyKey(state, key): ExplorerState | null`
 
-```markdown
-![Performance Chart](./assets/chart.svg)
-```
+Apply a keypress to explorer state. Returns `null` on quit.
 
-## 🤝 Contributing
+### `buildFrame(values, state): string`
 
-See [CONTRIBUTING.md](CONTRIBUTING.md)
+Build a complete terminal frame (chart + status bar) for the explorer.
 
-## 📄 License
+### `startExplorer(data, options?): Promise<void>`
 
-MIT © [AdametherzLab](https://github.com/AdametherzLab)
+Start the interactive terminal explorer session.

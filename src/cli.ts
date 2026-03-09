@@ -1,8 +1,9 @@
 import * as fs from "fs";
 import * as path from "path";
 import type { ChartOptions, ChartType, ColorScheme, ParsedData, RenderResult } from "./types.js";
-import { parseInput } from "./parser.js";
-import { renderChart } from "./renderer.js";
+import { parseInput } from "./parse.js";
+import { renderBar, renderSpark, renderHeatmap, renderBraille, renderColumn, renderToSvg } from "./renderers.js";
+import { startExplorer } from "./explorer.js";
 
 const VALID_CHART_TYPES: readonly ChartType[] = ["bar", "column", "spark", "heatmap", "braille"];
 const VALID_COLOR_SCHEMES: readonly ColorScheme[] = [
@@ -11,6 +12,19 @@ const VALID_COLOR_SCHEMES: readonly ColorScheme[] = [
 
 interface CliArguments extends ChartOptions {
   readonly positional?: string;
+  readonly interactive?: boolean;
+}
+
+function renderChart(data: ParsedData, options: ChartOptions): RenderResult {
+  const chartType = options.chartType ?? "bar";
+  switch (chartType) {
+    case "bar": return renderBar(data.values, options);
+    case "column": return renderColumn(data.values, options);
+    case "spark": return renderSpark(data.values, options);
+    case "heatmap": return renderHeatmap(data.values, options);
+    case "braille": return renderBraille(data.values, options);
+    default: return renderBar(data.values, options);
+  }
 }
 
 /**
@@ -22,29 +36,36 @@ interface CliArguments extends ChartOptions {
  * @example
  * // Render bar chart from file
  * runCli(["--type", "bar", "data.csv"]);
- * 
+ *
+ * // Interactive explorer mode
+ * runCli(["--interactive", "data.csv"]);
+ *
  * // Render with custom width and save SVG
  * runCli(["--width", "60", "--svg", "out.svg", "--title", "Sales"]);
  */
-export function runCli(argv: readonly string[]): void {
+export async function runCli(argv: readonly string[]): Promise<void> {
   try {
     const args = parseArguments(argv);
-    const { positional, ...chartOptions } = args;
-    
-    const inputPath = positional ?? null;
-    const parsedData: ParsedData = parseInput(inputPath);
+    const { positional, interactive, ...chartOptions } = args;
+
+    const inputPath = positional ?? undefined;
+    const parsedData: ParsedData = await parseInput(inputPath);
+
+    if (interactive) {
+      await startExplorer(parsedData, chartOptions);
+      return;
+    }
+
     const result: RenderResult = renderChart(parsedData, chartOptions);
-    
+
     // Output terminal visualization
     console.log(result.terminal);
-    
+
     // Write SVG if requested
     if (chartOptions.svgOutputPath) {
-      if (!result.svg) {
-        throw new Error("Renderer did not generate SVG output");
-      }
+      const svg = renderToSvg(parsedData.values, chartOptions, chartOptions.chartType ?? "bar");
       const resolvedPath = path.resolve(chartOptions.svgOutputPath);
-      fs.writeFileSync(resolvedPath, result.svg, "utf-8");
+      fs.writeFileSync(resolvedPath, svg, "utf-8");
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
@@ -60,11 +81,12 @@ function parseArguments(argv: readonly string[]): CliArguments {
   let color: ColorScheme | undefined;
   let svgOutputPath: string | undefined;
   let title: string | undefined;
+  let interactive = false;
   const positionals: string[] = [];
 
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
-    
+
     if (arg === "--type" || arg === "-t") {
       const value = args[++i];
       if (!value) throw new Error("Missing value for --type flag");
@@ -99,6 +121,8 @@ function parseArguments(argv: readonly string[]): CliArguments {
       const value = args[++i];
       if (!value) throw new Error("Missing value for --title flag");
       title = value;
+    } else if (arg === "--interactive" || arg === "-i") {
+      interactive = true;
     } else if (arg.startsWith("-")) {
       throw new Error(`Unknown flag: ${arg}`);
     } else {
@@ -118,12 +142,13 @@ function parseArguments(argv: readonly string[]): CliArguments {
     color,
     title,
     svgOutputPath,
+    interactive,
     positional: positionals[0]
   } satisfies CliArguments;
 }
 
 // Auto-execute when run directly (not imported)
-const isMainModule = import.meta.url === `file://${process.argv[1]}` || 
+const isMainModule = import.meta.url === `file://${process.argv[1]}` ||
                      import.meta.url === process.argv[1];
 
 if (isMainModule) {

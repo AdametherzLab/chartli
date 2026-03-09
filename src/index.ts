@@ -4,7 +4,6 @@ export {
   renderHeatmap,
   renderBraille,
   renderColumn,
-  renderChart,
   renderToSvg,
 } from "./renderers.js";
 
@@ -15,6 +14,15 @@ export {
 
 export { runCli } from "./cli.js";
 
+export {
+  createExplorerState,
+  applyKey,
+  renderExplorerChart,
+  buildStatusBar,
+  buildFrame,
+  startExplorer,
+} from "./explorer.js";
+
 export type {
   ChartOptions,
   ChartType,
@@ -22,3 +30,7 @@ export type {
   ParsedData,
   RenderResult,
 } from "./types.js";
+
+export type {
+  ExplorerState,
+} from "./explorer.js";
