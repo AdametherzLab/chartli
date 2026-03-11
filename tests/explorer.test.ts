@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'bun:test';
-import { createExplorerState, applyKey, buildFrame } from '../src/explorer.js';
+import { createExplorerState, applyKey, buildFrame, buildStatusBar, processInputData, readInputContent } from '../src/explorer.js';
+import { Readable } from 'stream';
 
 describe('Interactive Data Explorer', () => {
   const testValues = [15, 30, 45, 60, 75];
@@ -77,5 +78,49 @@ describe('Interactive Data Explorer', () => {
     
     expect(lowState.width).toBe(10);
     expect(highState.width).toBe(200);
+  });
+
+  it('should display input option in status bar', () => {
+    const state = createExplorerState();
+    const bar = buildStatusBar(state);
+    expect(bar).toContain('[i]');
+    expect(bar).toContain('input');
+  });
+
+  it('should process valid input data correctly', () => {
+    const input = '10 20 30 40 50';
+    const result = processInputData(input);
+    expect(result).not.toBeNull();
+    expect(result!.values).toEqual([10, 20, 30, 40, 50]);
+    expect(result!.sourceFormat).toBe('plain');
+  });
+
+  it('should process CSV input data correctly', () => {
+    const input = 'Month,Sales\nJan,100\nFeb,200\nMar,300';
+    const result = processInputData(input);
+    expect(result).not.toBeNull();
+    expect(result!.values).toEqual([100, 200, 300]);
+    expect(result!.labels).toEqual(['Jan', 'Feb', 'Mar']);
+    expect(result!.sourceFormat).toBe('csv');
+  });
+
+  it('should return null for invalid input data', () => {
+    const input = 'not a number';
+    const result = processInputData(input);
+    expect(result).toBeNull();
+  });
+
+  it('should return null for empty input', () => {
+    const input = '   ';
+    const result = processInputData(input);
+    expect(result).toBeNull();
+  });
+
+  it('should handle JSON array input', () => {
+    const input = '[10, 20, 30, 40, 50]';
+    const result = processInputData(input);
+    expect(result).not.toBeNull();
+    expect(result!.values).toEqual([10, 20, 30, 40, 50]);
+    expect(result!.sourceFormat).toBe('json');
   });
 });

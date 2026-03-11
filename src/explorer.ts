@@ -1,5 +1,7 @@
 import type { ChartOptions, ChartType, ColorScheme, ParsedData, RenderResult } from "./types.js";
 import { renderBar, renderSpark, renderHeatmap, renderBraille, renderColumn } from "./renderers.js";
+import { parseText } from "./parse.js";
+import * as readline from "readline";
 
 const CHART_TYPES: readonly ChartType[] = ["bar", "column", "spark", "heatmap", "braille"];
 const COLOR_SCHEMES: readonly ColorScheme[] = ["auto", "none", "red", "green", "yellow", "blue", "magenta", "cyan", "white"];
@@ -86,6 +88,49 @@ export function applyKey(state: ExplorerState, key: string): ExplorerState | nul
 }
 
 /**
+ * Read multi-line input from stdin until empty line or EOF.
+ * Exported for testing purposes.
+ * @returns Promise resolving to the input string
+ */
+export async function readInputContent(): Promise<string> {
+  return new Promise((resolve) => {
+    const lines: string[] = [];
+    const rl = readline.createInterface({
+      input: process.stdin,
+      output: process.stdout,
+      terminal: false
+    });
+    
+    rl.on("line", (line: string) => {
+      if (line === "") {
+        rl.close();
+      } else {
+        lines.push(line);
+      }
+    });
+    
+    rl.on("close", () => {
+      resolve(lines.join("\n"));
+    });
+  });
+}
+
+/**
+ * Process raw input text into ParsedData.
+ * Exported for testing purposes.
+ * @param input - Raw text input from user
+ * @returns ParsedData or null if empty/invalid
+ */
+export function processInputData(input: string): ParsedData | null {
+  if (!input.trim()) return null;
+  try {
+    return parseText(input);
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Render the chart for the current explorer state.
  * @param values - Numeric data to visualize
  * @param state - Current explorer state with chart parameters
@@ -118,7 +163,7 @@ export function buildStatusBar(state: ExplorerState): string {
     "",
     "\x1b[90m" + "─".repeat(60) + "\x1b[0m",
     `\x1b[1m  type:\x1b[0m ${state.chartType}  \x1b[1mwidth:\x1b[0m ${state.width}  \x1b[1mcolor:\x1b[0m ${state.color}`,
-    "\x1b[90m  [t/T] type  [w/W] width ±${WIDTH_STEP}  [c/C] color  [q] quit\x1b[0m",
+    `\x1b[90m  [t/T] type  [w/W] width ±${WIDTH_STEP}  [c/C] color  [i] input  [q] quit\x1b[0m`,
   ];
   return lines.join("\n");
 }
@@ -137,6 +182,7 @@ export function buildFrame(values: readonly number[], state: ExplorerState): str
 /**
  * Start the interactive chart explorer in the terminal.
  * Reads keypresses in raw mode and re-renders the chart on each change.
+ * Supports interactive data input via 'i' key.
  * @param data - Parsed data containing values and optional labels
  * @param initialOptions - Starting chart options
  * @returns Promise that resolves when the user quits (presses q)
@@ -148,12 +194,12 @@ export async function startExplorer(data: ParsedData, initialOptions?: Partial<C
   }
 
   let state = createExplorerState(initialOptions);
-  const values = data.values;
+  let currentValues = [...data.values];
 
   const clearAndRender = (): void => {
     // Clear screen and move cursor to top-left
     process.stdout.write("\x1b[2J\x1b[H");
-    process.stdout.write(buildFrame(values, state) + "\n");
+    process.stdout.write(buildFrame(currentValues, state) + "\n");
   };
 
   process.stdin.setRawMode(true);
@@ -163,11 +209,36 @@ export async function startExplorer(data: ParsedData, initialOptions?: Partial<C
   clearAndRender();
 
   return new Promise<void>((resolve) => {
-    const onData = (key: string): void => {
+    const onData = async (key: string): Promise<void> => {
       // Handle Ctrl+C
       if (key === "\x03") {
         cleanup();
         process.exit(0);
+      }
+
+      // Handle input mode
+      if (key === "i" || key === "I") {
+        process.stdout.write("\x1b[2J\x1b[H");
+        process.stdout.write("\x1b[1mEnter/paste data (empty line to finish):\x1b[0m\n");
+        process.stdin.setRawMode!(false);
+        process.stdin.pause();
+        
+        const input = await readInputContent();
+        
+        process.stdin.setRawMode!(true);
+        process.stdin.resume();
+        
+        const newData = processInputData(input);
+        if (newData) {
+          currentValues = [...newData.values];
+        } else if (input.trim()) {
+          // Show error for invalid input
+          process.stdout.write("\x1b[31mError: Invalid data format\x1b[0m\n");
+          await new Promise(r => setTimeout(r, 1500));
+        }
+        
+        clearAndRender();
+        return;
       }
 
       const nextState = applyKey(state, key);
